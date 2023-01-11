@@ -128,7 +128,6 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 	}
 
 	time.Sleep(time.Millisecond * 10)
-
 	{ // EXIT_DAEMON
 		w.Close()
 	}
