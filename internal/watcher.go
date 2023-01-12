@@ -17,7 +17,7 @@ func WithCallbackFunction(hook func(e Event)) Option {
 				select {
 				case e := <-ech:
 					hook(e)
-				case <-w.close:
+				case <-w.closed:
 					for e := range ech {
 						hook(e)
 					}
@@ -36,7 +36,7 @@ func WithBufferSize(size int32) Option {
 
 type Watcher struct {
 	fw         *fsnotify.Watcher
-	close      chan struct{}
+	closed     chan struct{}
 	subs       []chan Event
 	bufferSize int32
 	wg         sync.WaitGroup
@@ -55,7 +55,7 @@ func NewWatcher(path string, options ...Option) (*Watcher, error) {
 
 	w := Watcher{
 		fw:         fw,
-		close:      make(chan struct{}),
+		closed:     make(chan struct{}),
 		subs:       make([]chan Event, 0),
 		bufferSize: 25,
 		wg:         sync.WaitGroup{},
@@ -90,7 +90,7 @@ func (w *Watcher) run() {
 		select {
 		case e := <-w.fw.Events:
 			w.fanOut(e)
-		case <-w.close:
+		case <-w.closed:
 			exitEvent := fsnotify.Event{
 				Name: ExitName,
 				Op:   fsnotify.Op(Exit),
@@ -112,7 +112,7 @@ func (w *Watcher) sub() chan Event {
 }
 
 func (w *Watcher) Close() {
-	_ = w.fw.Close() // close filesystem watcher
-	close(w.close)   // close local threads
+	_ = w.fw.Close() // Close filesystem watcher
+	close(w.closed)  // Close local threads
 	w.wg.Wait()
 }

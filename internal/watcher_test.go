@@ -119,7 +119,7 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 		_, err = f.WriteString("test string !")
 		require.NoError(t, err, "write into file.")
 		err = f.Close()
-		require.NoError(t, err, "close file.")
+		require.NoError(t, err, "Close file.")
 	}
 
 	{ // REMOVE

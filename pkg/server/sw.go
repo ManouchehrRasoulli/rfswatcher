@@ -49,7 +49,7 @@ func (s *Server) Run() error {
 
 func (s *Server) Close() error {
 	if s.w != nil {
-		s.w.Close()
+		s.w.close()
 	}
 	return s.l.Close()
 }
