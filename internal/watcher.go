@@ -42,13 +42,8 @@ type Watcher struct {
 	wg         sync.WaitGroup
 }
 
-func NewWatcher(path string, options ...Option) (*Watcher, error) {
+func NewWatcher(options ...Option) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, err
-	}
-
-	err = fw.Add(path)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +63,15 @@ func NewWatcher(path string, options ...Option) (*Watcher, error) {
 	go w.run()
 
 	return &w, nil
+}
+
+func (w *Watcher) AddPath(path string) error {
+	err := w.fw.Add(path)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (w *Watcher) fanOut(e fsnotify.Event) {

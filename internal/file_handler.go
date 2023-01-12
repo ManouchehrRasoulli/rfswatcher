@@ -40,7 +40,6 @@ type Handler struct {
 	// inorder to handle list of files and their statuses we will
 	// use following map to handle metadata information about files.
 	meta   map[string]fMeta
-	w      *Watcher
 	rwM    sync.RWMutex
 	path   string
 	logger *log.Logger
@@ -49,19 +48,12 @@ type Handler struct {
 func NewHandler(path string, logger *log.Logger) (*Handler, error) {
 	h := Handler{
 		meta:   make(map[string]fMeta),
-		w:      nil,
 		rwM:    sync.RWMutex{},
 		path:   path,
 		logger: logger,
 	}
 
-	w, err := NewWatcher(path, WithCallbackFunction(h.changeHook))
-	if err != nil {
-		return nil, err
-	}
-	h.w = w
-
-	if err = h.readDir(path); err != nil {
+	if err := h.readDir(path); err != nil {
 		return nil, err
 	}
 
@@ -97,10 +89,8 @@ func (h *Handler) ListFiles() {
 	}
 }
 
-func (h *Handler) Stop() {
-	h.w.Close()
-}
-
-func (h *Handler) changeHook(e Event) {
+// EventHook
+// handler callback function inorder to bee used in watcher
+func (h *Handler) EventHook(e Event) {
 	fmt.Println("handler --> ", e)
 }

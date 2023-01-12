@@ -21,8 +21,11 @@ func TestWatcher_WithFastExit(t *testing.T) {
 		atomic.AddInt64(&run, 1)
 	}
 
-	w, e := NewWatcher(testPath, WithCallbackFunction(c))
+	w, e := NewWatcher(WithCallbackFunction(c))
 	require.NoError(t, e, "create watcher on test path.")
+
+	e = w.AddPath(testPath)
+	require.NoError(t, e, "add path into watcher.")
 
 	w.Close()
 	require.Equal(t, int64(1), run)
@@ -46,8 +49,11 @@ func TestWatcher_WithFastExitForTwoHooks(t *testing.T) {
 		atomic.AddInt64(&run, 1)
 	}
 
-	w, e := NewWatcher(testPath, WithCallbackFunction(c1), WithCallbackFunction(c2))
+	w, e := NewWatcher(WithCallbackFunction(c1), WithCallbackFunction(c2))
 	require.NoError(t, e, "create watcher on test path.")
+
+	e = w.AddPath(testPath)
+	require.NoError(t, e, "add path into watcher.")
 
 	w.Close()
 	require.Equal(t, int64(2), run)
@@ -105,8 +111,11 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 		atomic.AddInt64(&run2, 1)
 	}
 
-	w, e := NewWatcher(testPath, WithCallbackFunction(c1), WithCallbackFunction(c2))
+	w, e := NewWatcher(WithCallbackFunction(c1), WithCallbackFunction(c2))
 	require.NoError(t, e, "create watcher on test path.")
+
+	e = w.AddPath(testPath)
+	require.NoError(t, e, "add path into watcher.")
 
 	var f *os.File
 	var err error
