@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"sync"
+	"time"
 )
 
 type fStatus int32
@@ -26,9 +27,10 @@ func (s fStatus) String() string {
 }
 
 type fMeta struct {
-	fName string
-	size  int64
-	stat  fStatus
+	fName      string
+	size       int64
+	stat       fStatus
+	modifyTime time.Time
 }
 
 func (f fMeta) String() string {
@@ -69,9 +71,10 @@ func (h *Handler) readDir(path string) error {
 	for _, f := range files {
 		if !f.IsDir() { // TODO :: remove inorder to watch sub-paths too
 			meta := fMeta{
-				fName: f.Name(),
-				size:  f.Size(),
-				stat:  clean,
+				fName:      f.Name(),
+				size:       f.Size(),
+				stat:       clean,
+				modifyTime: f.ModTime(),
 			}
 
 			h.logger.Printf("handler :: got file with following meta --> %s\n", meta)
