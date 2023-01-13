@@ -54,5 +54,5 @@ func (op Op) Has(h Op) bool { return op&h == h }
 func (e Event) Has(op Op) bool { return e.Op.Has(op) }
 
 func (e Event) String() string {
-	return fmt.Sprintf("%-13s %q", e.Op.String(), e.Name)
+	return fmt.Sprintf("event :: %-13s %q", e.Op.String(), e.Name)
 }

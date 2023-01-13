@@ -14,18 +14,16 @@ func TestWatcher_WithFastExit(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	var run int64
 
-	c := func(e Event) {
+	c := func(e Event, err error) {
+		require.NoError(t, err, "got error on hook !!")
 		t.Log(e)
 		require.Equal(t, ExitName, e.Name)
 		require.Equal(t, Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
 
-	w, e := NewWatcher(WithCallbackFunction(c))
+	w, e := NewWatcher(testPath, WithCallbackFunction(c))
 	require.NoError(t, e, "create watcher on test path.")
-
-	e = w.AddPath(testPath)
-	require.NoError(t, e, "add path into watcher.")
 
 	w.Close()
 	require.Equal(t, int64(1), run)
@@ -36,24 +34,23 @@ func TestWatcher_WithFastExitForTwoHooks(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	var run int64
 
-	c1 := func(e Event) {
+	c1 := func(e Event, err error) {
+		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook-1 : ", e)
 		require.Equal(t, ExitName, e.Name)
 		require.Equal(t, Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
-	c2 := func(e Event) {
+	c2 := func(e Event, err error) {
+		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook-2 : ", e)
 		require.Equal(t, ExitName, e.Name)
 		require.Equal(t, Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
 
-	w, e := NewWatcher(WithCallbackFunction(c1), WithCallbackFunction(c2))
+	w, e := NewWatcher(testPath, WithCallbackFunction(c1), WithCallbackFunction(c2))
 	require.NoError(t, e, "create watcher on test path.")
-
-	e = w.AddPath(testPath)
-	require.NoError(t, e, "add path into watcher.")
 
 	w.Close()
 	require.Equal(t, int64(2), run)
@@ -93,7 +90,8 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 	}
 
 	var run1 int64
-	c1 := func(e Event) {
+	c1 := func(e Event, err error) {
+		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook - 1 : ", run1, e.String())
 		td := testTable[run1]
 		require.Equal(t, td.Op, e.Op)
@@ -102,7 +100,8 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 		atomic.AddInt64(&run1, 1)
 	}
 	var run2 int64
-	c2 := func(e Event) {
+	c2 := func(e Event, err error) {
+		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook - 2 : ", run2, e.String())
 		td := testTable[run2]
 		require.Equal(t, td.Op, e.Op)
@@ -111,11 +110,8 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 		atomic.AddInt64(&run2, 1)
 	}
 
-	w, e := NewWatcher(WithCallbackFunction(c1), WithCallbackFunction(c2))
+	w, e := NewWatcher(testPath, WithCallbackFunction(c1), WithCallbackFunction(c2))
 	require.NoError(t, e, "create watcher on test path.")
-
-	e = w.AddPath(testPath)
-	require.NoError(t, e, "add path into watcher.")
 
 	var f *os.File
 	var err error

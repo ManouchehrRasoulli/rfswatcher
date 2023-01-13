@@ -1,13 +1,16 @@
 package internal
 
 import (
+	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"io/ioutil"
+	"os"
 	"sync"
 )
 
 type Option func(w *Watcher)
 
-func WithCallbackFunction(hook func(e Event)) Option {
+func WithCallbackFunction(hook func(e Event, err error)) Option {
 	return func(w *Watcher) {
 		ech := w.sub()
 
@@ -16,10 +19,16 @@ func WithCallbackFunction(hook func(e Event)) Option {
 			for {
 				select {
 				case e := <-ech:
-					hook(e)
+					if e.Op == Create {
+						fs, _ := os.Stat(e.Name)
+						if fs != nil && fs.IsDir() {
+							_ = w.fw.Add(e.Name)
+						}
+					}
+					hook(e, nil)
 				case <-w.closed:
 					for e := range ech {
-						hook(e)
+						hook(e, nil)
 					}
 					return
 				}
@@ -40,9 +49,10 @@ type Watcher struct {
 	subs       []chan Event
 	bufferSize int32
 	wg         sync.WaitGroup
+	path       string
 }
 
-func NewWatcher(options ...Option) (*Watcher, error) {
+func NewWatcher(path string, options ...Option) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -54,6 +64,12 @@ func NewWatcher(options ...Option) (*Watcher, error) {
 		subs:       make([]chan Event, 0),
 		bufferSize: 25,
 		wg:         sync.WaitGroup{},
+		path:       path,
+	}
+
+	err = w.watchPath(path)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, op := range options {
@@ -65,12 +81,25 @@ func NewWatcher(options ...Option) (*Watcher, error) {
 	return &w, nil
 }
 
-func (w *Watcher) AddPath(path string) error {
-	err := w.fw.Add(path)
+func (w *Watcher) watchPath(path string) error {
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		return err
 	}
 
+	for _, f := range files {
+		if f.IsDir() {
+			err = w.watchPath(fmt.Sprintf("%s/%s", path, f.Name()))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	err = w.fw.Add(path)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

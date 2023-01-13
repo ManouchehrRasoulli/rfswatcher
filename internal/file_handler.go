@@ -4,37 +4,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
 
-type fStatus int32
-
-const (
-	clean fStatus = iota
-	dirty
-)
-
-func (s fStatus) String() string {
-	switch s {
-	case clean:
-		return "clean"
-	case dirty:
-		return "dirty"
-	default:
-		return "-"
-	}
-}
-
 type fMeta struct {
 	fName      string
 	size       int64
-	stat       fStatus
 	modifyTime time.Time
 }
 
 func (f fMeta) String() string {
-	return fmt.Sprintf("file-name: %s, size: %d, status: %s", f.fName, f.stat, f.stat)
+	return fmt.Sprintf("file meata :: file-name: %s, size: %d, modified_at: %v", f.fName, f.size, f.modifyTime.String())
 }
 
 type Handler struct {
@@ -48,6 +31,8 @@ type Handler struct {
 }
 
 func NewHandler(path string, logger *log.Logger) (*Handler, error) {
+	logger.Printf("NEW handler :: on path %s\n", path)
+
 	h := Handler{
 		meta:   make(map[string]fMeta),
 		rwM:    sync.RWMutex{},
@@ -69,17 +54,23 @@ func (h *Handler) readDir(path string) error {
 	}
 
 	for _, f := range files {
-		if !f.IsDir() { // TODO :: remove inorder to watch sub-paths too
+		fName := fmt.Sprintf("%s/%s", path, f.Name())
+		if !f.IsDir() {
 			meta := fMeta{
-				fName:      f.Name(),
+				fName:      fName,
 				size:       f.Size(),
-				stat:       clean,
 				modifyTime: f.ModTime(),
 			}
 
 			h.logger.Printf("handler :: got file with following meta --> %s\n", meta)
 
-			h.meta[f.Name()] = meta
+			h.meta[fmt.Sprintf("%s/%s", path, f.Name())] = meta
+			continue
+		} else {
+			err = h.readDir(fName)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -87,6 +78,7 @@ func (h *Handler) readDir(path string) error {
 }
 
 func (h *Handler) ListFiles() {
+	h.logger.Printf("handler :: list files ---- %d\n", len(h.meta))
 	for _, meta := range h.meta {
 		fmt.Println(meta)
 	}
@@ -94,6 +86,53 @@ func (h *Handler) ListFiles() {
 
 // EventHook
 // handler callback function inorder to bee used in watcher
-func (h *Handler) EventHook(e Event) {
-	fmt.Println("handler --> ", e)
+func (h *Handler) EventHook(e Event, err error) {
+	if err != nil {
+		h.logger.Printf("ERROR handler :: got error %v on hook\n", err)
+		return
+	}
+
+	if strings.Contains(e.Name, "swp") ||
+		strings.Contains(e.Name, ".goutputstream") ||
+		e.Op.Has(Chmod) {
+		return
+	}
+
+	if !strings.HasPrefix(e.Name, h.path) {
+		// unrelated to this handler
+		return
+	}
+
+	if e.Op == Remove || e.Op == Rename {
+		h.logger.Printf("handler :: remove file meta --> %s, on event %s\n", h.meta[e.Name], e)
+		delete(h.meta, e.Name)
+		return
+	}
+
+	fs, err := os.Stat(e.Name)
+	if err != nil {
+		h.logger.Printf("ERROR handler :: got error %v, on event %s\n", err, e)
+		return
+	}
+
+	if !fs.IsDir() {
+		if _, contains := h.meta[e.Name]; contains {
+			h.meta[e.Name] = fMeta{
+				fName:      e.Name,
+				size:       fs.Size(),
+				modifyTime: fs.ModTime(),
+			}
+			h.logger.Printf("handler :: got modification on file meta --> %s, on event %s\n", h.meta[e.Name], e)
+			return
+		} else {
+			h.meta[e.Name] = fMeta{
+				fName:      e.Name,
+				size:       fs.Size(),
+				modifyTime: fs.ModTime(),
+			}
+
+			h.logger.Printf("handler :: got new file meta --> %s, on event %s\n", h.meta[e.Name], e)
+			return
+		}
+	}
 }
