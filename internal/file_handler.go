@@ -40,6 +40,8 @@ func NewHandler(path string, logger *log.Logger) (*Handler, error) {
 		logger: logger,
 	}
 
+	h.rwM.Lock()
+	defer h.rwM.Unlock()
 	if err := h.readDir(path); err != nil {
 		return nil, err
 	}
@@ -78,6 +80,9 @@ func (h *Handler) readDir(path string) error {
 }
 
 func (h *Handler) ListFiles() {
+	h.rwM.RLock()
+	defer h.rwM.RUnlock()
+
 	h.logger.Printf("handler :: list files ---- %d\n", len(h.meta))
 	for _, meta := range h.meta {
 		fmt.Println(meta)
@@ -116,6 +121,9 @@ func (h *Handler) EventHook(e Event, err error) {
 	}
 
 	if !fs.IsDir() {
+		h.rwM.Lock()
+		defer h.rwM.Unlock()
+
 		if _, contains := h.meta[e.Name]; contains {
 			h.meta[e.Name] = fMeta{
 				fName:      e.Name,
