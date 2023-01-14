@@ -65,7 +65,6 @@ func (h *Handler) readDir(path string) error {
 			}
 
 			h.logger.Printf("handler :: got file with following meta --> %s\n", meta)
-
 			h.meta[fmt.Sprintf("%s/%s", path, f.Name())] = meta
 			continue
 		} else {
