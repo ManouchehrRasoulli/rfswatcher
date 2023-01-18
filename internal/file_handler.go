@@ -123,23 +123,17 @@ func (h *Handler) EventHook(e Event, err error) {
 		h.rwM.Lock()
 		defer h.rwM.Unlock()
 
-		if _, contains := h.meta[e.Name]; contains {
-			h.meta[e.Name] = fMeta{
-				fName:      e.Name,
-				size:       fs.Size(),
-				modifyTime: fs.ModTime(),
-			}
-			h.logger.Printf("handler :: got modification on file meta --> %s, on event %s\n", h.meta[e.Name], e)
-			return
-		} else {
-			h.meta[e.Name] = fMeta{
-				fName:      e.Name,
-				size:       fs.Size(),
-				modifyTime: fs.ModTime(),
-			}
-
-			h.logger.Printf("handler :: got new file meta --> %s, on event %s\n", h.meta[e.Name], e)
-			return
+		meta := fMeta{
+			fName:      e.Name,
+			size:       fs.Size(),
+			modifyTime: fs.ModTime(),
 		}
+		if _, contains := h.meta[e.Name]; contains {
+			h.logger.Printf("handler :: got modification on file meta --> %s, on event %s\n", h.meta[e.Name], e)
+		} else {
+			h.logger.Printf("handler :: got new file meta --> %s, on event %s\n", h.meta[e.Name], e)
+		}
+		h.meta[e.Name] = meta
+
 	}
 }

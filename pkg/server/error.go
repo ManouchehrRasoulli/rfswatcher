@@ -3,5 +3,5 @@ package server
 import "errors"
 
 var (
-	Exit = errors.New("Server exited")
+	Exit = errors.New("server exited")
 )
