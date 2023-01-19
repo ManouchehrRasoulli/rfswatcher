@@ -10,7 +10,7 @@ import (
 )
 
 func TestWatcher_WithFastExit(t *testing.T) {
-	testPath := "./"
+	testPath := "."
 	defer goleak.VerifyNone(t)
 	var run int64
 
@@ -30,7 +30,7 @@ func TestWatcher_WithFastExit(t *testing.T) {
 }
 
 func TestWatcher_WithFastExitForTwoHooks(t *testing.T) {
-	testPath := "./"
+	testPath := "."
 	defer goleak.VerifyNone(t)
 	var run int64
 
@@ -57,8 +57,8 @@ func TestWatcher_WithFastExitForTwoHooks(t *testing.T) {
 }
 
 func TestWatcher_WithCreateChanges(t *testing.T) {
-	testPath := "./"
-	testFilePath := "./test.txt"
+	testPath := "."
+	testFilePath := "test.txt"
 
 	type testData struct {
 		Op       Op

@@ -6,6 +6,7 @@ import (
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -19,12 +20,12 @@ type Server struct {
 	exit    chan struct{}
 }
 
-func NewServer(address string, logger *log.Logger) *Server {
+func NewServer(address string, logger *log.Logger, f *internal.Handler) *Server {
 	s := Server{
 		address: address,
 		logger:  logger,
 		e:       make(chan internal.Event, 2),
-		f:       nil,
+		f:       f,
 		exit:    make(chan struct{}, 0),
 	}
 
@@ -41,6 +42,14 @@ func (s *Server) EventHook(event internal.Event, err error) {
 		s.logger.Printf("server error :: receive error %v on hook\n", err)
 		return
 	}
+
+	if strings.Contains(event.Name, "swp") ||
+		strings.Contains(event.Name, ".goutputstream") ||
+		strings.HasSuffix(event.Name, "~") ||
+		event.Op.Has(internal.Chmod) {
+		return
+	}
+
 	s.e <- event
 }
 
@@ -68,6 +77,12 @@ func (s *Server) Run() error {
 				select {
 				case e := <-s.e:
 					{
+						fMeta := s.f.GetMeta(e.Name)
+						if fMeta == nil {
+							s.logger.Printf("server error :: nil meta data !! for event %v\n", e)
+							continue
+						}
+
 						data := protocol.Data{
 							Sec:     0,
 							Time:    time.Now(),
@@ -77,8 +92,8 @@ func (s *Server) Run() error {
 								Path:       "",
 								FileName:   e.Name,
 								Op:         e.Op,
-								Size:       0,
-								ChangeDate: time.Time{},
+								Size:       fMeta.Size,
+								ChangeDate: fMeta.ModifyTime,
 							},
 						}
 
@@ -100,8 +115,6 @@ func (s *Server) Run() error {
 							s.logger.Printf("server error :: inconsistent data write !! %d != %d\n", n, len(dataByte))
 							continue
 						}
-
-						s.logger.Printf("server :: send event %s\n", string(dataByte))
 					}
 				case <-s.exit:
 					_ = conn.Close()

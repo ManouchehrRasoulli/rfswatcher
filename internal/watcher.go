@@ -5,6 +5,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -104,10 +105,6 @@ func (w *Watcher) watchPath(path string) error {
 }
 
 func (w *Watcher) fanOut(e fsnotify.Event) {
-	if len(e.Name) == 0 { // no event !
-		return
-	}
-
 	event := Event{
 		Name: e.Name,
 		Op:   Op(e.Op),
@@ -122,6 +119,11 @@ func (w *Watcher) run() {
 	for {
 		select {
 		case e := <-w.fw.Events:
+			if len(e.Name) == 0 { // no event !
+				continue
+			}
+
+			e.Name = strings.TrimPrefix(e.Name, "./")
 			w.fanOut(e)
 		case <-w.closed:
 			exitEvent := fsnotify.Event{
