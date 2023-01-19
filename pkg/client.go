@@ -11,18 +11,20 @@ import (
 )
 
 type Client struct {
-	address string
-	logger  *log.Logger
-	f       *internal.Handler
-	exit    chan struct{}
+	address  string
+	logger   *log.Logger
+	f        *internal.Handler
+	exit     chan struct{}
+	download chan protocol.FileMetaPayload
 }
 
 func NewClient(address string, logger *log.Logger) *Client {
 	c := Client{
-		address: address,
-		logger:  logger,
-		f:       nil,
-		exit:    make(chan struct{}),
+		address:  address,
+		logger:   logger,
+		f:        nil,
+		exit:     make(chan struct{}),
+		download: make(chan protocol.FileMetaPayload, 1),
 	}
 
 	return &c
@@ -40,6 +42,29 @@ func (c *Client) Run() error {
 	}
 
 	c.logger.Printf("client :: connected to host %s ...\n", c.address)
+
+	req := protocol.Data{
+		Sec:     0,
+		Time:    time.Time{},
+		Type:    protocol.SubscribePath,
+		Heading: nil,
+		Payload: protocol.SubscribePathPayload{
+			Path: "root",
+			Id:   "10",
+		},
+	}
+	rb, err := json.Marshal(req)
+	if err != nil {
+		c.logger.Printf("client error :: got error %v on marshal subscribe request\n", err)
+		return err
+	}
+
+	rb = append(rb, '@')
+	n, err := conn.Write(rb)
+	if n != len(rb) {
+		c.logger.Printf("client error :: send subscribe request %v\n", err)
+		return err
+	}
 
 	r := bufio.NewReader(conn)
 	for {
@@ -65,7 +90,43 @@ func (c *Client) Run() error {
 				continue
 			}
 
-			c.logger.Printf("client :: got data %v\n", d)
+			if d.Type == protocol.ChangeNotify {
+				c.logger.Printf("client :: got modification notification %v\n", d)
+
+				dp, ok := d.Payload.(protocol.FileMetaPayload)
+				if !ok {
+					c.logger.Printf("client :: error invalid file notify change payload %v, %T\n", d.Payload, d.Payload)
+					continue
+				}
+
+				c.download <- dp
+			} else {
+				c.logger.Printf("client :: got data %v !!\n", d)
+			}
 		}
 	}
+}
+
+func (c *Client) downloader() {
+	go func() {
+		for {
+			select {
+			case e := <-c.download:
+				{
+					if e.Op.Has(internal.Write | internal.Create) {
+						// download file
+						_, _ = net.Dial("tcp", c.address)
+
+					}
+					if e.Op.Has(internal.Remove) {
+						// remove files
+						c.logger.Printf("client worker :: remove file notification %v !!", e)
+						continue
+					}
+				}
+			case <-c.exit:
+				return
+			}
+		}
+	}()
 }

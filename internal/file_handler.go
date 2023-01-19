@@ -143,6 +143,5 @@ func (h *Handler) EventHook(e Event, err error) {
 			h.logger.Printf("handler :: got new file meta --> %s, on event %s\n", h.meta[e.Name], e)
 		}
 		h.meta[e.Name] = meta
-
 	}
 }
