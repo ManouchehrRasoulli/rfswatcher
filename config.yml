@@ -1,0 +1,8 @@
+#type: # specify service type with following configuration
+#  - server
+#  - client
+# address: string # address for client or server
+# path: string # root empty path which server and client is replicating
+type: server
+address: 0.0.0.0:9901
+path: /home/rasouli/project/rfswatcher/server

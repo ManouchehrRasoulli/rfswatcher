@@ -1,7 +1,10 @@
 package pkg
 
 import (
-	"github.com/ManouchehrRasoulli/rfswatcher/internal"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/client"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/server"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/watcher"
 	"github.com/stretchr/testify/require"
 	"log"
 	"os"
@@ -13,12 +16,12 @@ func TestIntegration(t *testing.T) {
 	t.Log("Start integration test ...")
 	lg := log.New(os.Stdout, "integration --> ", 1|4)
 
-	fileHandler, err := internal.NewHandler(".", lg)
+	fileHandler, err := filehandler.NewHandler(".", lg)
 	require.NoError(t, err, "internal handler !")
 
 	address := "localhost:9801"
-	s := NewServer(address, lg, fileHandler)
-	w, err := internal.NewWatcher(".", internal.WithCallbackFunction(fileHandler.EventHook), internal.WithCallbackFunction(s.EventHook))
+	s := server.NewServer(address, lg, fileHandler)
+	w, err := watcher.NewWatcher(".", watcher.WithCallbackFunction(fileHandler.EventHook), watcher.WithCallbackFunction(s.EventHook))
 	require.NoError(t, err, "new watcher error !")
 	defer w.Close()
 
@@ -27,13 +30,17 @@ func TestIntegration(t *testing.T) {
 		require.NoError(t, err, "server error !")
 	}()
 
-	c := NewClient(address, lg)
+	time.Sleep(time.Second)
+
+	c := client.NewClient(address, lg, fileHandler)
 	go func() {
 		err := c.Run()
 		require.NoError(t, err, "client error !")
 	}()
 
-	timer := time.AfterFunc(time.Minute*2, func() {
+	exit := make(chan struct{})
+	_ = time.AfterFunc(time.Second*2, func() {
+		defer close(exit)
 		err = c.Exit()
 		require.NoError(t, err, "client exit !!")
 
@@ -41,6 +48,6 @@ func TestIntegration(t *testing.T) {
 		require.NoError(t, err, "server exit !!")
 	})
 
-	<-timer.C
+	<-exit
 	t.Log("Integration test done.")
 }

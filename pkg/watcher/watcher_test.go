@@ -1,6 +1,7 @@
-package internal
+package watcher
 
 import (
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 	"os"
@@ -14,11 +15,11 @@ func TestWatcher_WithFastExit(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	var run int64
 
-	c := func(e Event, err error) {
+	c := func(e model.Event, err error) {
 		require.NoError(t, err, "got error on hook !!")
 		t.Log(e)
-		require.Equal(t, ExitName, e.Name)
-		require.Equal(t, Exit, e.Op)
+		require.Equal(t, model.ExitName, e.Name)
+		require.Equal(t, model.Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
 
@@ -34,18 +35,18 @@ func TestWatcher_WithFastExitForTwoHooks(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	var run int64
 
-	c1 := func(e Event, err error) {
+	c1 := func(e model.Event, err error) {
 		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook-1 : ", e)
-		require.Equal(t, ExitName, e.Name)
-		require.Equal(t, Exit, e.Op)
+		require.Equal(t, model.ExitName, e.Name)
+		require.Equal(t, model.Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
-	c2 := func(e Event, err error) {
+	c2 := func(e model.Event, err error) {
 		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook-2 : ", e)
-		require.Equal(t, ExitName, e.Name)
-		require.Equal(t, Exit, e.Op)
+		require.Equal(t, model.ExitName, e.Name)
+		require.Equal(t, model.Exit, e.Op)
 		atomic.AddInt64(&run, 1)
 	}
 
@@ -61,36 +62,36 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 	testFilePath := "test.txt"
 
 	type testData struct {
-		Op       Op
+		Op       model.Op
 		Name     string
 		FileName string
 	}
 
 	testTable := [4]testData{
 		{
-			Op:       Create,
+			Op:       model.Create,
 			Name:     testFilePath,
 			FileName: testFilePath,
 		},
 		{
-			Op:       Write,
+			Op:       model.Write,
 			Name:     testFilePath,
 			FileName: testFilePath,
 		},
 		{
-			Op:       Remove,
+			Op:       model.Remove,
 			Name:     testFilePath,
 			FileName: testFilePath,
 		},
 		{
-			Op:       Exit,
-			Name:     ExitName,
+			Op:       model.Exit,
+			Name:     model.ExitName,
 			FileName: "",
 		},
 	}
 
 	var run1 int64
-	c1 := func(e Event, err error) {
+	c1 := func(e model.Event, err error) {
 		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook - 1 : ", run1, e.String())
 		td := testTable[run1]
@@ -100,7 +101,7 @@ func TestWatcher_WithCreateChanges(t *testing.T) {
 		atomic.AddInt64(&run1, 1)
 	}
 	var run2 int64
-	c2 := func(e Event, err error) {
+	c2 := func(e model.Event, err error) {
 		require.NoError(t, err, "got error on hook !!")
 		t.Log("hook - 2 : ", run2, e.String())
 		td := testTable[run2]

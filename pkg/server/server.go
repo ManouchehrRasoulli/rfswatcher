@@ -1,9 +1,11 @@
-package pkg
+package server
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
-	"github.com/ManouchehrRasoulli/rfswatcher/internal"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
 	"log"
 	"net"
@@ -16,16 +18,16 @@ type Mode int
 type Server struct {
 	address string
 	logger  *log.Logger
-	e       chan internal.Event
-	f       *internal.Handler
+	e       chan model.Event
+	f       *filehandler.Handler
 	exit    chan struct{}
 }
 
-func NewServer(address string, logger *log.Logger, f *internal.Handler) *Server {
+func NewServer(address string, logger *log.Logger, f *filehandler.Handler) *Server {
 	s := Server{
 		address: address,
 		logger:  logger,
-		e:       make(chan internal.Event, 2),
+		e:       make(chan model.Event, 2),
 		f:       f,
 		exit:    make(chan struct{}, 0),
 	}
@@ -38,7 +40,7 @@ func (s *Server) Exit() error {
 	return nil
 }
 
-func (s *Server) EventHook(event internal.Event, err error) {
+func (s *Server) EventHook(event model.Event, err error) {
 	if err != nil {
 		s.logger.Printf("server error :: receive error %v on hook\n", err)
 		return
@@ -47,7 +49,7 @@ func (s *Server) EventHook(event internal.Event, err error) {
 	if strings.Contains(event.Name, "swp") ||
 		strings.Contains(event.Name, ".goutputstream") ||
 		strings.HasSuffix(event.Name, "~") ||
-		event.Op.Has(internal.Chmod) {
+		event.Op.Has(model.Chmod) {
 		return
 	}
 
@@ -68,13 +70,15 @@ func (s *Server) Run() error {
 	s.logger.Printf("server :: running on host %s, port %s ...\n", host, port)
 
 	for {
-		conn, err := l.Accept() // handle single connection
+		var conn net.Conn
+		conn, err = l.Accept() // handle single connection
 		if err != nil {
 			return err
 		}
 
 		r := bufio.NewReader(conn)
-		data, err := r.ReadBytes('@')
+		var data []byte
+		data, err = r.ReadBytes('@')
 		if err != nil {
 			s.logger.Printf("server error :: got error %v, %T...\n", err, err)
 			continue
@@ -94,13 +98,17 @@ func (s *Server) Run() error {
 						select {
 						case e := <-s.e:
 							{
+								if strings.HasPrefix(e.Name, "exit") {
+									continue
+								}
+
 								fMeta := s.f.GetMeta(e.Name)
 								if fMeta == nil {
 									s.logger.Printf("server error :: nil meta data !! for event %v\n", e)
 									continue
 								}
 
-								data := protocol.Data{
+								resData := protocol.Data{
 									Sec:     0,
 									Time:    time.Now(),
 									Type:    protocol.ChangeNotify,
@@ -114,17 +122,17 @@ func (s *Server) Run() error {
 									},
 								}
 
-								dataByte, err := json.Marshal(data)
-								if err != nil {
-									s.logger.Printf("server error :: %v on marshalling data %v\n", err, data)
+								dataByte, cerr := json.Marshal(resData)
+								if cerr != nil {
+									s.logger.Printf("server error :: %v on marshalling data %v\n", cerr, data)
 									continue
 								}
 
 								dataByte = append(dataByte, '@')
 
-								n, err := conn.Write(dataByte)
-								if err != nil {
-									s.logger.Printf("server error :: %v writing data\n", err)
+								n, werr := conn.Write(dataByte)
+								if werr != nil {
+									s.logger.Printf("server error :: %v writing data\n", werr)
 									continue
 								}
 
@@ -141,7 +149,33 @@ func (s *Server) Run() error {
 			}
 		case protocol.RequestFile:
 			{ // download changes
+				payload := req.Payload.(protocol.RequestFilePayload)
+				data, err = s.f.ReadFile(payload.FileName)
+				if err != nil {
+					s.logger.Printf("server error :: error on reading file %v !!\n", err)
+					continue
+				}
 
+				res := protocol.Data{
+					Sec:     req.Sec + 1,
+					Time:    time.Now(),
+					Type:    protocol.ResponseFile,
+					Heading: req.Heading,
+					Payload: protocol.FileResponsePayload(data),
+				}
+
+				data, err = json.Marshal(res)
+				if err != nil {
+					s.logger.Printf("server error :: %v on marshalling data %v --> response file\n", err, data)
+					continue
+				}
+				ds := make([]byte, 0, len(data))
+				base64.StdEncoding.Encode(ds, data)
+				ds = append(ds, '@')
+				_, err = conn.Write(ds)
+				if err != nil {
+					s.logger.Printf("server error :: %v on writing file data into socket !!\n", err)
+				}
 			}
 		default:
 			s.logger.Printf("server error :: bad request from client %s !!\n", string(data[:len(data)-1]))

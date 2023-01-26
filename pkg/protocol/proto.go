@@ -1,7 +1,7 @@
 package protocol
 
 import (
-	"github.com/ManouchehrRasoulli/rfswatcher/internal"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"time"
 )
 
@@ -35,11 +35,11 @@ type Data struct {
 }
 
 type FileMetaPayload struct {
-	Path       string      `json:"p"`
-	FileName   string      `json:"f"`
-	Op         internal.Op `json:"op"`
-	Size       int64       `json:"sz"`
-	ChangeDate time.Time   `json:"cd"`
+	Path       string    `json:"p"`
+	FileName   string    `json:"f"`
+	Op         model.Op  `json:"op"`
+	Size       int64     `json:"sz"`
+	ChangeDate time.Time `json:"cd"`
 }
 
 type RequestFilePayload struct {

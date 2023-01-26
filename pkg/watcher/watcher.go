@@ -1,7 +1,8 @@
-package internal
+package watcher
 
 import (
 	"fmt"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"os"
@@ -11,16 +12,16 @@ import (
 
 type Option func(w *Watcher)
 
-func WithCallbackFunction(hook func(e Event, err error)) Option {
+func WithCallbackFunction(hook func(e model.Event, err error)) Option {
 	return func(w *Watcher) {
 		ech := w.sub()
 
-		go func(ech chan Event) {
+		go func(ech chan model.Event) {
 			defer w.wg.Done()
 			for {
 				select {
 				case e := <-ech:
-					if e.Op == Create {
+					if e.Op == model.Create {
 						fs, _ := os.Stat(e.Name)
 						if fs != nil && fs.IsDir() {
 							_ = w.fw.Add(e.Name)
@@ -47,7 +48,7 @@ func WithBufferSize(size int32) Option {
 type Watcher struct {
 	fw         *fsnotify.Watcher
 	closed     chan struct{}
-	subs       []chan Event
+	subs       []chan model.Event
 	bufferSize int32
 	wg         sync.WaitGroup
 	path       string
@@ -62,7 +63,7 @@ func NewWatcher(path string, options ...Option) (*Watcher, error) {
 	w := Watcher{
 		fw:         fw,
 		closed:     make(chan struct{}),
-		subs:       make([]chan Event, 0),
+		subs:       make([]chan model.Event, 0),
 		bufferSize: 25,
 		wg:         sync.WaitGroup{},
 		path:       path,
@@ -105,9 +106,9 @@ func (w *Watcher) watchPath(path string) error {
 }
 
 func (w *Watcher) fanOut(e fsnotify.Event) {
-	event := Event{
+	event := model.Event{
 		Name: e.Name,
-		Op:   Op(e.Op),
+		Op:   model.Op(e.Op),
 	}
 
 	for i := range w.subs {
@@ -127,8 +128,8 @@ func (w *Watcher) run() {
 			w.fanOut(e)
 		case <-w.closed:
 			exitEvent := fsnotify.Event{
-				Name: ExitName,
-				Op:   fsnotify.Op(Exit),
+				Name: model.ExitName,
+				Op:   fsnotify.Op(model.Exit),
 			}
 			w.fanOut(exitEvent)
 			for i := range w.subs {
@@ -139,8 +140,8 @@ func (w *Watcher) run() {
 	}
 }
 
-func (w *Watcher) sub() chan Event {
-	ch := make(chan Event, w.bufferSize)
+func (w *Watcher) sub() chan model.Event {
+	ch := make(chan model.Event, w.bufferSize)
 	w.subs = append(w.subs, ch)
 	w.wg.Add(1)
 	return ch

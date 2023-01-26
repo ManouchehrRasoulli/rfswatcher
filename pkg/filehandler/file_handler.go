@@ -1,7 +1,8 @@
-package internal
+package filehandler
 
 import (
 	"fmt"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"io/ioutil"
 	"log"
 	"os"
@@ -101,9 +102,85 @@ func (h *Handler) ListFiles() {
 	}
 }
 
+func (h *Handler) RemoveFile(name string) error {
+	h.rwM.Lock()
+	defer h.rwM.Unlock()
+
+	name = strings.TrimPrefix(name, "./")
+	name = fmt.Sprintf("%s/%s", h.path, name)
+
+	_ = os.RemoveAll(name)
+	return h.readDir(h.path, 0)
+}
+
+func (h *Handler) ReadFile(name string) ([]byte, error) {
+	h.rwM.RLock()
+	defer h.rwM.RUnlock()
+
+	name = strings.TrimPrefix(name, ".")
+	name = strings.TrimPrefix(name, "/")
+
+	fm, ok := h.meta[name]
+	if !ok {
+		return nil, fmt.Errorf("invalid file name %s", name)
+	}
+
+	name = fmt.Sprintf("%s/%s", h.path, name)
+
+	return os.ReadFile(fm.Name)
+}
+
+func (h *Handler) WriteFile(name string, data []byte) error {
+	h.rwM.Lock()
+	defer h.rwM.Unlock()
+
+	name = strings.TrimPrefix(name, "./")
+	name = fmt.Sprintf("%s/%s", h.path, name)
+	_, err := os.Stat(name)
+	if err != nil {
+		nl := strings.Split(name, "/")
+
+		if len(nl) == 1 {
+			// create file only
+			f, err := os.Create(name)
+			if err != nil {
+				return fmt.Errorf("error create file %v", err)
+			}
+
+			n, err := f.Write(data)
+			if n != len(data) || err != nil {
+				return fmt.Errorf("error on write into file %s - %d,%d - %v", name, n, len(data), err)
+			}
+
+			return h.readDir(h.path, 0) // update local cache files
+		}
+
+		path := strings.Join(nl[:len(nl)-1], "/")
+		err = os.MkdirAll(path, 0777)
+		if err != nil {
+			return fmt.Errorf("error %v create path %s", err, path)
+		}
+
+		f, err := os.Create(name)
+		if err != nil {
+			return fmt.Errorf("error %v create file, %s", err, name)
+		}
+
+		n, err := f.Write(data)
+		if n != len(data) || err != nil {
+			return fmt.Errorf("error on write into file %s - %d,%d - %v", name, n, len(data), err)
+		}
+
+		return h.readDir(h.path, 0) // update local cache files
+	}
+
+	// rewrite given file
+	return os.WriteFile(name, data, 0777)
+}
+
 // EventHook
 // handler callback function inorder to bee used in watcher
-func (h *Handler) EventHook(e Event, err error) {
+func (h *Handler) EventHook(e model.Event, err error) {
 	if err != nil {
 		h.logger.Printf("ERROR handler :: got error %v on hook\n", err)
 		return
@@ -112,11 +189,12 @@ func (h *Handler) EventHook(e Event, err error) {
 	if strings.Contains(e.Name, "swp") ||
 		strings.Contains(e.Name, ".goutputstream") ||
 		strings.HasSuffix(e.Name, "~") ||
-		e.Op.Has(Chmod) {
+		strings.HasPrefix(e.Name, "exit") ||
+		e.Op.Has(model.Chmod) {
 		return
 	}
 
-	if e.Op == Remove || e.Op == Rename {
+	if e.Op == model.Remove || e.Op == model.Rename {
 		h.logger.Printf("handler :: remove file meta --> %s, on event %s\n", h.meta[e.Name], e)
 		delete(h.meta, e.Name)
 		return
