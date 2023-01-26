@@ -2,7 +2,6 @@ package client
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
@@ -52,10 +51,7 @@ func (c *Client) Run() error {
 		Time:    time.Now(),
 		Type:    protocol.SubscribePath,
 		Heading: nil,
-		Payload: protocol.SubscribePathPayload{
-			Path: "root",
-			Id:   "10",
-		},
+		Payload: nil,
 	}
 	rb, err := json.Marshal(req)
 	if err != nil {
@@ -83,7 +79,6 @@ func (c *Client) Run() error {
 			}
 			data, err := r.ReadBytes('@')
 			if err != nil {
-				c.logger.Printf("client error :: got error %v, %T...\n", err, err)
 				continue
 			}
 
@@ -95,15 +90,14 @@ func (c *Client) Run() error {
 			}
 
 			if d.Type == protocol.ChangeNotify {
-				c.logger.Printf("client :: got modification notification %v\n", d)
-
-				dp, ok := d.Payload.(protocol.FileMetaPayload)
-				if !ok {
-					c.logger.Printf("client :: error invalid file notify change payload %v, %T\n", d.Payload, d.Payload)
+				payload := protocol.FileMetaPayload{}
+				err = json.Unmarshal(d.Payload, &payload)
+				if err != nil {
+					c.logger.Printf("client :: error invalid file notify change payload %v, %T\n", string(d.Payload), d.Payload)
 					continue
 				}
 
-				c.download <- dp
+				c.download <- payload
 			} else {
 				c.logger.Printf("client :: got data %v !!\n", d)
 			}
@@ -125,16 +119,17 @@ func (c *Client) downloader() {
 							continue
 						}
 
+						reqPayload, _ := json.Marshal(protocol.RequestFilePayload{
+							Path:       e.Path,
+							FileName:   e.FileName,
+							ChangeDate: e.ChangeDate,
+						})
 						req := protocol.Data{
 							Sec:     0,
 							Time:    time.Now(),
 							Type:    protocol.RequestFile,
 							Heading: nil,
-							Payload: protocol.RequestFilePayload{
-								Path:       e.Path,
-								FileName:   e.FileName,
-								ChangeDate: e.ChangeDate,
-							},
+							Payload: reqPayload,
 						}
 
 						rb, err := json.Marshal(req)
@@ -164,14 +159,15 @@ func (c *Client) downloader() {
 						}
 
 						data = data[:len(data)-1]
-						ds := make([]byte, 0, len(data))
-						n, err = base64.StdEncoding.Decode(ds, data)
-						if n != len(data) || n != len(ds) || err != nil {
-							c.logger.Printf("client worker :: got error %c on decoding data !!\n", err)
+
+						response := protocol.Data{}
+						err = json.Unmarshal(data, &response)
+						if err != nil {
+							c.logger.Printf("client worker ERROR :: error %v on reading file request response !!", err)
 							continue
 						}
 
-						err = c.f.WriteFile(e.FileName, data)
+						err = c.f.WriteFile(e.FileName, response.Payload)
 						if err != nil {
 							c.logger.Printf("client worker ERROR :: error %v on write data into file !!\n", e, e.FileName)
 						}

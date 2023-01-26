@@ -20,7 +20,7 @@ func TestIntegration(t *testing.T) {
 	require.NoError(t, err, "internal handler !")
 
 	address := "localhost:9801"
-	s := server.NewServer(address, lg, fileHandler)
+	s := server.NewServer(address, ".", lg, fileHandler)
 	w, err := watcher.NewWatcher(".", watcher.WithCallbackFunction(fileHandler.EventHook), watcher.WithCallbackFunction(s.EventHook))
 	require.NoError(t, err, "new watcher error !")
 	defer w.Close()

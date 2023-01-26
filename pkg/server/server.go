@@ -2,7 +2,6 @@ package server
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
@@ -21,15 +20,17 @@ type Server struct {
 	e       chan model.Event
 	f       *filehandler.Handler
 	exit    chan struct{}
+	path    string
 }
 
-func NewServer(address string, logger *log.Logger, f *filehandler.Handler) *Server {
+func NewServer(address string, path string, logger *log.Logger, f *filehandler.Handler) *Server {
 	s := Server{
 		address: address,
 		logger:  logger,
 		e:       make(chan model.Event, 2),
 		f:       f,
 		exit:    make(chan struct{}, 0),
+		path:    path,
 	}
 
 	return &s
@@ -98,28 +99,31 @@ func (s *Server) Run() error {
 						select {
 						case e := <-s.e:
 							{
-								if strings.HasPrefix(e.Name, "exit") {
+								if strings.HasPrefix(e.Name, "exit") ||
+									e.Op.Has(model.Create) {
 									continue
 								}
 
+								e.Name = strings.TrimPrefix(e.Name, s.path)
 								fMeta := s.f.GetMeta(e.Name)
 								if fMeta == nil {
 									s.logger.Printf("server error :: nil meta data !! for event %v\n", e)
 									continue
 								}
 
+								resPaylod, _ := json.Marshal(protocol.FileMetaPayload{
+									Path:       s.path,
+									FileName:   e.Name,
+									Op:         e.Op,
+									Size:       fMeta.Size,
+									ChangeDate: fMeta.ModifyTime,
+								})
 								resData := protocol.Data{
 									Sec:     0,
 									Time:    time.Now(),
 									Type:    protocol.ChangeNotify,
 									Heading: nil,
-									Payload: protocol.FileMetaPayload{
-										Path:       "",
-										FileName:   e.Name,
-										Op:         e.Op,
-										Size:       fMeta.Size,
-										ChangeDate: fMeta.ModifyTime,
-									},
+									Payload: resPaylod,
 								}
 
 								dataByte, cerr := json.Marshal(resData)
@@ -149,8 +153,13 @@ func (s *Server) Run() error {
 			}
 		case protocol.RequestFile:
 			{ // download changes
-				payload := req.Payload.(protocol.RequestFilePayload)
-				data, err = s.f.ReadFile(payload.FileName)
+				reqPayload := protocol.RequestFilePayload{}
+				err = json.Unmarshal(req.Payload, &reqPayload)
+				if err != nil {
+					s.logger.Printf("server error :: error invalid payload for request file %v !!\n", err)
+					continue
+				}
+				data, err = s.f.ReadFile(reqPayload.FileName)
 				if err != nil {
 					s.logger.Printf("server error :: error on reading file %v !!\n", err)
 					continue
@@ -161,7 +170,7 @@ func (s *Server) Run() error {
 					Time:    time.Now(),
 					Type:    protocol.ResponseFile,
 					Heading: req.Heading,
-					Payload: protocol.FileResponsePayload(data),
+					Payload: data,
 				}
 
 				data, err = json.Marshal(res)
@@ -169,10 +178,8 @@ func (s *Server) Run() error {
 					s.logger.Printf("server error :: %v on marshalling data %v --> response file\n", err, data)
 					continue
 				}
-				ds := make([]byte, 0, len(data))
-				base64.StdEncoding.Encode(ds, data)
-				ds = append(ds, '@')
-				_, err = conn.Write(ds)
+				data = append(data, '@')
+				_, err = conn.Write(data)
 				if err != nil {
 					s.logger.Printf("server error :: %v on writing file data into socket !!\n", err)
 				}

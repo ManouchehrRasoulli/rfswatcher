@@ -37,21 +37,21 @@ func main() {
 				clg.Printcf(logger.ColorRed, "server error : got error %v on initiating file handler !", err)
 				os.Exit(1)
 			}
-			server := server.NewServer(cfg.Address, lg, handler)
-			defer server.Exit()
+			srv := server.NewServer(cfg.Address, cfg.Path, lg, handler)
+			defer srv.Exit()
 
-			watcher, err := watcher.NewWatcher(cfg.Path,
+			watch, err := watcher.NewWatcher(cfg.Path,
 				watcher.WithCallbackFunction(handler.EventHook),
-				watcher.WithCallbackFunction(server.EventHook))
+				watcher.WithCallbackFunction(srv.EventHook))
 
 			if err != nil {
 				clg.Printcf(logger.ColorRed, "server error : got error %v on watcher !", err)
 				os.Exit(1)
 			}
 
-			defer watcher.Close()
+			defer watch.Close()
 
-			err = server.Run()
+			err = srv.Run()
 			if err != nil {
 				clg.Printcf(logger.ColorRed, "server error : got error %v running http server !!", err)
 				os.Exit(1)
@@ -65,8 +65,8 @@ func main() {
 				os.Exit(1)
 			}
 
-			client := client.NewClient(cfg.Address, lg, handler)
-			err = client.Run()
+			cli := client.NewClient(cfg.Address, lg, handler)
+			err = cli.Run()
 			if err != nil {
 				lg.Printf(logger.ColorRed, "client error : got error %v on initialize connection with server !!", err)
 				os.Exit(1)

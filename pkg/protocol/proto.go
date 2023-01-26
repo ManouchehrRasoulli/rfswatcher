@@ -31,7 +31,7 @@ type Data struct {
 	Time    time.Time              `json:"t"`
 	Type    Type                   `json:"tp"`
 	Heading map[string]interface{} `json:"h"`
-	Payload interface{}            `json:"p"`
+	Payload []byte                 `json:"p"`
 }
 
 type FileMetaPayload struct {

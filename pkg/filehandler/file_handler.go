@@ -51,6 +51,7 @@ func NewHandler(path string, logger *log.Logger) (*Handler, error) {
 }
 
 func (h *Handler) GetMeta(name string) *Meta {
+	name = strings.TrimPrefix(name, h.path)
 	if m, c := h.meta[name]; c {
 		metaCopy := m
 		return &metaCopy
@@ -118,23 +119,24 @@ func (h *Handler) ReadFile(name string) ([]byte, error) {
 	defer h.rwM.RUnlock()
 
 	name = strings.TrimPrefix(name, ".")
-	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimPrefix(name, h.path)
 
-	fm, ok := h.meta[name]
+	_, ok := h.meta[name]
 	if !ok {
 		return nil, fmt.Errorf("invalid file name %s", name)
 	}
 
 	name = fmt.Sprintf("%s/%s", h.path, name)
 
-	return os.ReadFile(fm.Name)
+	return os.ReadFile(name)
 }
 
 func (h *Handler) WriteFile(name string, data []byte) error {
 	h.rwM.Lock()
 	defer h.rwM.Unlock()
 
-	name = strings.TrimPrefix(name, "./")
+	name = strings.TrimPrefix(name, ".")
+	name = strings.TrimPrefix(name, "/")
 	name = fmt.Sprintf("%s/%s", h.path, name)
 	_, err := os.Stat(name)
 	if err != nil {
@@ -206,6 +208,7 @@ func (h *Handler) EventHook(e model.Event, err error) {
 		return
 	}
 
+	e.Name = strings.TrimPrefix(e.Name, h.path)
 	if !fs.IsDir() {
 		h.rwM.Lock()
 		defer h.rwM.Unlock()
