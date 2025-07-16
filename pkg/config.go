@@ -14,11 +14,14 @@ type ServerTLSConfig struct {
 }
 
 type ServerConfig struct {
+	PwFile string          `yaml:"pwfile"`
 	TLS    ServerTLSConfig `yaml:"tls"`
 }
 
 type ClientConfig struct {
 	TLS      bool   `yaml:"tls"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 const (
