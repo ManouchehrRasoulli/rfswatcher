@@ -72,7 +72,7 @@ func main() {
 			if cfg.Server.TLS.Cert != "" || cfg.Server.TLS.Key != "" {
 				tls = &server.ServerTLS{Cert: cfg.Server.TLS.Cert, Key: cfg.Server.TLS.Key}
 			}
-			srv := server.NewServer(cfg.Address, cfg.Path, tls, lg, handler)
+			srv := server.NewServer(cfg.Address, cfg.Path, tls, um, lg, handler)
 			defer srv.Exit()
 
 			watch, err := watcher.NewWatcher(cfg.Path,
@@ -105,7 +105,7 @@ func main() {
 				tlsCfg = &tls.Config{}
 			}
 
-			cli := client.NewClient(cfg.Address, tlsCfg, lg, handler)
+			cli := client.NewClient(cfg.Address, cfg.Client.Username, cfg.Client.Password, tlsCfg, lg, handler)
 			err = cli.Run()
 			if err != nil {
 				clg.Printcf(logger.ColorRed, "client error : got error %v on initialize connection with server !!", err)

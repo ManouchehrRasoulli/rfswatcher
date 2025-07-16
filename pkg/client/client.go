@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"time"
@@ -13,19 +14,34 @@ import (
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
 )
 
+var (
+	ErrClientReadPacket              = errors.New("failed to read packet from connection")
+	ErrClientMarshalPacket           = errors.New("failed to marshal packet data")
+	ErrClientWritePacket             = errors.New("failed to write packet to connection")
+	ErrClientInconsistentWrite       = errors.New("inconsistent data write: bytes written mismatch")
+	ErrClientAuthenticationFailed    = errors.New("authentication failed")
+	ErrClientInvalidPacketType       = errors.New("invalid packet type received")
+	ErrClientUnmarshalResponsePacket = errors.New("failed to unmarshal response packet data")
+	ErrClientReadDeadline            = errors.New("failed to set read deadline on connection")
+)
+
 type Client struct {
 	tls      *tls.Config
 	address  string
+	username string
+	password string
 	logger   *log.Logger
 	f        *filehandler.Handler
 	exit     chan struct{}
 	download chan protocol.FileMetaPayload
 }
 
-func NewClient(address string, tls *tls.Config, logger *log.Logger, f *filehandler.Handler) *Client {
+func NewClient(address string, username string, password string, tls *tls.Config, logger *log.Logger, f *filehandler.Handler) *Client {
 	c := Client{
 		tls:      tls,
 		address:  address,
+		username: username,
+		password: password,
 		logger:   logger,
 		f:        f,
 		exit:     make(chan struct{}),
@@ -59,6 +75,8 @@ func (c *Client) Run() error {
 
 		conn = _conn
 	}
+
+	c.Auth(conn, c.username, c.password)
 
 	c.logger.Printf("client :: connected to host %s ...\n", c.address)
 
@@ -146,6 +164,10 @@ func (c *Client) downloader() {
 							}
 
 							conn = _conn
+						}
+
+						if err := c.Auth(conn, c.username, c.password); err != nil {
+							continue
 						}
 
 						reqPayload, _ := json.Marshal(protocol.RequestFilePayload{
