@@ -11,13 +11,19 @@ import (
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/logger"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/server"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/user"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/watcher"
 )
 
 func main() {
 	var config string
+	var createUserFlag bool
+	var deleteUserFlag bool
+
 	flag.StringVar(&config, "config", "config.yml", "specify configuration file for service.")
 	flag.StringVar(&config, "c", "config.yml", "specify configuration file for service.")
+	flag.BoolVar(&createUserFlag, "create-user", false, "create user")
+	flag.BoolVar(&deleteUserFlag, "delete-user", false, "delete user")
 	flag.Parse()
 
 	lg := log.New(os.Stdout, "rfswatcher --> ", 1|4)
@@ -34,6 +40,29 @@ func main() {
 	switch cfg.ServiceType {
 	case pkg.ServerType:
 		{
+			var um *user.UserManager = nil
+			if cfg.Server.PwFile != "" {
+				um := &user.UserManager{PwFile: cfg.Server.PwFile}
+
+				if err := um.Init(); err != nil {
+					clg.Printcf(logger.ColorRed, "server error : failed user manager initiallazation. %v", err)
+				}
+
+				if createUserFlag {
+					if err := um.CreateUser(nil); err != nil {
+						clg.Printcf(logger.ColorRed, "server error : failed to create user. %v", err)
+						os.Exit(1)
+					}
+					os.Exit(0)
+				} else if deleteUserFlag {
+					if err := um.DeleteUser(""); err != nil {
+						clg.Printcf(logger.ColorRed, "server error : failed to delete user. %v", err)
+						os.Exit(1)
+					}
+					os.Exit(0)
+				}
+			}
+
 			handler, err := filehandler.NewHandler(cfg.Path, lg)
 			if err != nil {
 				clg.Printcf(logger.ColorRed, "server error : got error %v on initiating file handler !", err)
