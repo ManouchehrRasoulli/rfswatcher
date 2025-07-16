@@ -2,16 +2,19 @@ package client
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
 	"log"
 	"net"
 	"time"
+
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
 )
 
 type Client struct {
+	tls      *tls.Config
 	address  string
 	logger   *log.Logger
 	f        *filehandler.Handler
@@ -19,8 +22,9 @@ type Client struct {
 	download chan protocol.FileMetaPayload
 }
 
-func NewClient(address string, logger *log.Logger, f *filehandler.Handler) *Client {
+func NewClient(address string, tls *tls.Config, logger *log.Logger, f *filehandler.Handler) *Client {
 	c := Client{
+		tls:      tls,
 		address:  address,
 		logger:   logger,
 		f:        f,
@@ -39,9 +43,21 @@ func (c *Client) Exit() error {
 }
 
 func (c *Client) Run() error {
-	conn, err := net.Dial("tcp", c.address)
-	if err != nil {
-		return err
+	var conn net.Conn
+	if c.tls != nil {
+		_conn, err := tls.Dial("tcp", c.address, c.tls)
+		if err != nil {
+			return err
+		}
+
+		conn = _conn
+	} else {
+		_conn, err := net.Dial("tcp", c.address)
+		if err != nil {
+			return err
+		}
+
+		conn = _conn
 	}
 
 	c.logger.Printf("client :: connected to host %s ...\n", c.address)
@@ -113,10 +129,23 @@ func (c *Client) downloader() {
 				{
 					if e.Op.Has(model.Write) {
 						// download file
-						conn, err := net.Dial("tcp", c.address)
-						if err != nil {
-							c.logger.Printf("client worker :: error establish download connection %v\n", err)
-							continue
+						var conn net.Conn
+						if c.tls != nil {
+							_conn, err := tls.Dial("tcp", c.address, c.tls)
+							if err != nil {
+								c.logger.Printf("client worker :: error establish download connection %v\n", err)
+								continue
+							}
+
+							conn = _conn
+						} else {
+							_conn, err := net.Dial("tcp", c.address)
+							if err != nil {
+								c.logger.Printf("client worker :: error establish download connection %v\n", err)
+								continue
+							}
+
+							conn = _conn
 						}
 
 						reqPayload, _ := json.Marshal(protocol.RequestFilePayload{
@@ -169,7 +198,7 @@ func (c *Client) downloader() {
 
 						err = c.f.WriteFile(e.FileName, response.Payload)
 						if err != nil {
-							c.logger.Printf("client worker ERROR :: error %v on write data into file !!\n", e, e.FileName)
+							c.logger.Printf("client worker ERROR :: error %v on write data into file %s!!\n", e, e.FileName)
 						}
 						continue
 						// read connection and tell file management to create file

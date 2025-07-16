@@ -1,15 +1,17 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
+	"log"
+	"os"
+
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/client"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/logger"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/server"
 	"github.com/ManouchehrRasoulli/rfswatcher/pkg/watcher"
-	"log"
-	"os"
 )
 
 func main() {
@@ -37,7 +39,11 @@ func main() {
 				clg.Printcf(logger.ColorRed, "server error : got error %v on initiating file handler !", err)
 				os.Exit(1)
 			}
-			srv := server.NewServer(cfg.Address, cfg.Path, lg, handler)
+			var tls *server.ServerTLS = nil
+			if cfg.Server.TLS.Cert != "" || cfg.Server.TLS.Key != "" {
+				tls = &server.ServerTLS{Cert: cfg.Server.TLS.Cert, Key: cfg.Server.TLS.Key}
+			}
+			srv := server.NewServer(cfg.Address, cfg.Path, tls, lg, handler)
 			defer srv.Exit()
 
 			watch, err := watcher.NewWatcher(cfg.Path,
@@ -61,19 +67,24 @@ func main() {
 		{
 			handler, err := filehandler.NewHandler(cfg.Path, lg)
 			if err != nil {
-				lg.Printf(logger.ColorRed, "client error : got error %v on initiating file handler !", err)
+				clg.Printcf(logger.ColorRed, "client error : got error %v on initiating file handler !", err)
 				os.Exit(1)
 			}
 
-			cli := client.NewClient(cfg.Address, lg, handler)
+			var tlsCfg *tls.Config
+			if cfg.Client.TLS {
+				tlsCfg = &tls.Config{}
+			}
+
+			cli := client.NewClient(cfg.Address, tlsCfg, lg, handler)
 			err = cli.Run()
 			if err != nil {
-				lg.Printf(logger.ColorRed, "client error : got error %v on initialize connection with server !!", err)
+				clg.Printcf(logger.ColorRed, "client error : got error %v on initialize connection with server !!", err)
 				os.Exit(1)
 			}
 		}
 	default:
-		clg.Printf(logger.ColorRed, "error rfswatcher : exit !! invalid service type %s !", cfg.ServiceType)
+		clg.Printcf(logger.ColorRed, "error rfswatcher : exit !! invalid service type %s !", cfg.ServiceType)
 		os.Exit(1)
 	}
 }

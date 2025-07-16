@@ -1,18 +1,23 @@
 package server
 
 import (
-	"bufio"
-	"encoding/json"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
+	"crypto/tls"
 	"log"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/user"
 )
 
 type Mode int
+
+type ServerTLS struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+}
 
 type Server struct {
 	address string
@@ -21,9 +26,10 @@ type Server struct {
 	f       *filehandler.Handler
 	exit    chan struct{}
 	path    string
+	tls     *ServerTLS
 }
 
-func NewServer(address string, path string, logger *log.Logger, f *filehandler.Handler) *Server {
+func NewServer(address string, path string, tls *ServerTLS, logger *log.Logger, f *filehandler.Handler) *Server {
 	s := Server{
 		address: address,
 		logger:  logger,
@@ -31,6 +37,7 @@ func NewServer(address string, path string, logger *log.Logger, f *filehandler.H
 		f:       f,
 		exit:    make(chan struct{}, 0),
 		path:    path,
+		tls:     tls,
 	}
 
 	return &s
@@ -58,9 +65,29 @@ func (s *Server) EventHook(event model.Event, err error) {
 }
 
 func (s *Server) Run() error {
-	l, err := net.Listen("tcp", s.address)
-	if err != nil {
-		return err
+	var l net.Listener
+
+	if s.tls == nil {
+		s.logger.Println("server warn :: TLS doesn't set")
+		ln, err := net.Listen("tcp", s.address)
+		if err != nil {
+			return err
+		}
+
+		l = ln
+	} else {
+		cert, err := tls.LoadX509KeyPair(s.tls.Cert, s.tls.Key)
+		if err != nil {
+			return err
+		}
+
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		ln, err := tls.Listen("tcp", s.address, tlsConfig)
+		if err != nil {
+			return err
+		}
+
+		l = ln
 	}
 
 	host, port, err := net.SplitHostPort(l.Addr().String())
