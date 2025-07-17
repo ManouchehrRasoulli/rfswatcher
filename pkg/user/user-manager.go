@@ -38,7 +38,7 @@ var (
 const (
 	columnSep  = ":"
 	hashCost   = 14
-	pwFileMode = 0644
+	pwFileMode = 0600
 )
 
 func (m *UserManager) Init() error {
