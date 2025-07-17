@@ -28,9 +28,9 @@ func NewColorLogger(lg *log.Logger) *ColorLogger {
 }
 
 func (c *ColorLogger) Printcf(color Color, format string, args ...interface{}) {
-	c.Print(string(color) + fmt.Sprintf(format, args...) + string(ColorBlack))
+	c.Print(string(color) + fmt.Sprintf(format, args...) + string(ColorReset))
 }
 
 func (c *ColorLogger) Printc(color Color, s string) {
-	c.Print(string(color) + s + string(ColorBlack))
+	c.Print(string(color) + s + string(ColorReset))
 }
