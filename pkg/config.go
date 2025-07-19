@@ -1,11 +1,28 @@
 package pkg
 
 import (
-	"gopkg.in/yaml.v3"
 	"io/ioutil"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Type string
+
+type ServerTLSConfig struct {
+	Key  string `yaml:"key"`
+	Cert string `yaml:"cert"`
+}
+
+type ServerConfig struct {
+	PwFile string          `yaml:"pwfile"`
+	TLS    ServerTLSConfig `yaml:"tls"`
+}
+
+type ClientConfig struct {
+	TLS      bool   `yaml:"tls"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
 
 const (
 	ServerType Type = "server"
@@ -13,9 +30,11 @@ const (
 )
 
 type Config struct {
-	ServiceType Type   `yaml:"type"`
-	Address     string `yaml:"address"`
-	Path        string `yaml:"path"`
+	ServiceType Type         `yaml:"type"`
+	Address     string       `yaml:"address"`
+	Path        string       `yaml:"path"`
+	Client      ClientConfig `yaml:"client"`
+	Server      ServerConfig `yaml:"server"`
 }
 
 func ReadConfig(file string) (*Config, error) {

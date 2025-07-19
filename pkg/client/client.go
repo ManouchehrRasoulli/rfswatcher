@@ -2,26 +2,46 @@ package client
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
+	"errors"
 	"log"
 	"net"
 	"time"
+
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/filehandler"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/protocol"
+)
+
+var (
+	ErrClientReadPacket              = errors.New("failed to read packet from connection")
+	ErrClientMarshalPacket           = errors.New("failed to marshal packet data")
+	ErrClientWritePacket             = errors.New("failed to write packet to connection")
+	ErrClientInconsistentWrite       = errors.New("inconsistent data write: bytes written mismatch")
+	ErrClientAuthenticationFailed    = errors.New("authentication failed")
+	ErrClientInvalidPacketType       = errors.New("invalid packet type received")
+	ErrClientUnmarshalResponsePacket = errors.New("failed to unmarshal response packet data")
+	ErrClientReadDeadline            = errors.New("failed to set read deadline on connection")
 )
 
 type Client struct {
+	tls      *tls.Config
 	address  string
+	username string
+	password string
 	logger   *log.Logger
 	f        *filehandler.Handler
 	exit     chan struct{}
 	download chan protocol.FileMetaPayload
 }
 
-func NewClient(address string, logger *log.Logger, f *filehandler.Handler) *Client {
+func NewClient(address string, username string, password string, tls *tls.Config, logger *log.Logger, f *filehandler.Handler) *Client {
 	c := Client{
+		tls:      tls,
 		address:  address,
+		username: username,
+		password: password,
 		logger:   logger,
 		f:        f,
 		exit:     make(chan struct{}),
@@ -39,10 +59,24 @@ func (c *Client) Exit() error {
 }
 
 func (c *Client) Run() error {
-	conn, err := net.Dial("tcp", c.address)
-	if err != nil {
-		return err
+	var conn net.Conn
+	if c.tls != nil {
+		_conn, err := tls.Dial("tcp", c.address, c.tls)
+		if err != nil {
+			return err
+		}
+
+		conn = _conn
+	} else {
+		_conn, err := net.Dial("tcp", c.address)
+		if err != nil {
+			return err
+		}
+
+		conn = _conn
 	}
+
+	c.Auth(conn, c.username, c.password)
 
 	c.logger.Printf("client :: connected to host %s ...\n", c.address)
 
@@ -113,9 +147,26 @@ func (c *Client) downloader() {
 				{
 					if e.Op.Has(model.Write) {
 						// download file
-						conn, err := net.Dial("tcp", c.address)
-						if err != nil {
-							c.logger.Printf("client worker :: error establish download connection %v\n", err)
+						var conn net.Conn
+						if c.tls != nil {
+							_conn, err := tls.Dial("tcp", c.address, c.tls)
+							if err != nil {
+								c.logger.Printf("client worker :: error establish download connection %v\n", err)
+								continue
+							}
+
+							conn = _conn
+						} else {
+							_conn, err := net.Dial("tcp", c.address)
+							if err != nil {
+								c.logger.Printf("client worker :: error establish download connection %v\n", err)
+								continue
+							}
+
+							conn = _conn
+						}
+
+						if err := c.Auth(conn, c.username, c.password); err != nil {
 							continue
 						}
 
@@ -169,7 +220,7 @@ func (c *Client) downloader() {
 
 						err = c.f.WriteFile(e.FileName, response.Payload)
 						if err != nil {
-							c.logger.Printf("client worker ERROR :: error %v on write data into file !!\n", e, e.FileName)
+							c.logger.Printf("client worker ERROR :: error %v on write data into file %s!!\n", e, e.FileName)
 						}
 						continue
 						// read connection and tell file management to create file

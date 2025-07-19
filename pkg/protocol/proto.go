@@ -1,8 +1,9 @@
 package protocol
 
 import (
-	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 	"time"
+
+	"github.com/ManouchehrRasoulli/rfswatcher/pkg/model"
 )
 
 type Type int64
@@ -13,6 +14,8 @@ const (
 	ResponseFile
 	SubscribePath
 	FilesList
+	Join
+	AckJoin
 )
 
 /*
@@ -58,4 +61,14 @@ type SubscribePathPayload struct {
 type PathFiles struct {
 	Path  string            `json:"p"`
 	Files []FileMetaPayload `json:"fi"`
+}
+
+type JoinPayload struct {
+	Username string `json:"u"`
+	Password string `json:"p"`
+}
+
+type AckJoinPayload struct {
+	Ok  bool   `json:"ok"`
+	Msg string `json:"msg"`
 }
